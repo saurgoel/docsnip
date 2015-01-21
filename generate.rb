@@ -5,6 +5,7 @@ $snippet_directory = "snippets"
 $files = Array.new
 
 # document snippets contained within different file types
+# do it using class and creating a new class variable that sets the title etc.
 
 def detect_comments(code,extension)
   flag=false
@@ -33,7 +34,7 @@ def detect_heading(code,extension)
   if flag
     if code[0] == "#"
       code = code.gsub("#","")
-      code = "<h1>#{code}</h1>"
+      code = "<h2>#{code}</h2>"
     elsif code[0] == "*"
       code = code.gsub("*","")
       code = "<li>#{code}</li>"
@@ -46,24 +47,49 @@ def detect_heading(code,extension)
   return code
 end
 
-def generate_html_wrapper(code,sidebar) 
+def generate_html_wrapper(code,sidebar,title) 
   return "
   <html>
     <head>
+      <title>DocSnip</title>
+      <script src='https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js'></script>
       <style>
         body {position: relative; font-family: 'Helvetica Neue', Helvetica, 'Segoe UI', Arial, freesans, sans-serif; font-size: 14px; line-height: 20px; margin: 0px;}
-        div.container{ width: 760px; margin: 0 auto; padding: 10px 30px; border-left: 1px solid #EEE; border-right: 1px solid #EEE; color: #333;}
+        div.container{ width: 760px; margin: 0 auto; padding: 10px 30px; border-left: 1px solid #EEE; border-right: 1px solid #EEE; color: #333; min-height: 100%;}
         h1 {font-size: 36px; color: #333;text-transform: capitalize; border-bottom: 1px solid #EEE; padding: 20px 30px; margin: 0px -30px;}
         p {color: #333; }
         p.code{ background: #f7f7f7; margin: 0px; padding: 7px 10px; font: 12px Consolas, 'Liberation Mono', Menlo, Courier, monospace;}
-        div.sidebar{position: absolute; top: 75px; left: 0px;}
+        div.sidebar{position: absolute; top: 75px; left: 0px; padding: 0px 0px; }
+        div.sidebar a{ color: #BBB; text-decoration: none;border-bottom: 1px solid #EEE; width: 200px; display: block; padding: 10px; }
+        div.sidebar a:hover{ color: #777; text-decoration: none;}
+        div.sidebar a.current{ color: #555; text-decoration: none; background: #F7F7F7; border-right: 1px solid #EEE;}
+        a.show-search{ position: absolute; visibility: hidden;}
+        input#search{padding: 8px 20px; font-size: 18px; margin: 10px; width: 213px; outline: none; border: 1px solid #DDD; -webkit-border-radius: 20px; -moz-border-radius: 20px; border-radius: 20px;}
       </style>
     </head>
     <body>
-      #{sidebar}
+      <div class='sidebar'><input id='search' type='text'>#{sidebar}</div>
       <div class='container'>
+        <h1>#{title}</h1>
         #{code}
       </div>
+      <script>
+        $(document).ready(function () {
+          $.extend($.expr[':'], {
+            'containsIN': function(elem, i, match, array) {
+            return (elem.textContent || elem.innerText || '').toLowerCase().indexOf((match[3] || '').toLowerCase()) >= 0;
+            }
+          })
+          $('#search').keyup(function (e) {
+            var filter = $(this).val();
+            $('div.sidebar a').removeClass('show-search');
+            if (filter.length > 3){
+              $('div.sidebar a:not(:containsIN('+filter+'))').addClass('show-search');
+            }
+           });
+        });
+      </script>
+
     </body>
   </html>"
 end
@@ -88,28 +114,31 @@ def generate_navigation(current_file)
     href = "#{Dir.pwd}/#{file.gsub(extension,'.html').gsub($snippet_directory,$output_directory)}"
     title = file.split("/").last.split(".").first.gsub(/[^0-9A-Za-z]/, ' ').capitalize
     if file == current_file
-      navigation+="<a class='current' href='#{href}'>#{title}</a><br/>"
+      navigation+="<a class='current' href='#{href}'>#{title}</a>"
     else
       # extract end name
-      navigation+="<a href='#{href}'>#{title}</a><br/>"
+      navigation+="<a href='#{href}'>#{title}</a>"
     end
   end
-  navigation = "<div class='sidebar'>#{navigation}</div>"
   return navigation
 end
 
+FileUtils.rm_rf($output_directory)
 iterate_files
 $files.each do |file|
   html = ""
   extension = file[/\.[0-9a-z]+$/]
-  File.open(file, "r").each_line do |line|
+  f = File.open(file, "r")
+  f.each_line do |line|
     unless line.strip.empty?
       line = detect_heading(line,extension)
       html = "#{html}#{line}"
     end
   end
+  f.close
   sidebar = generate_navigation(file)
-  html = generate_html_wrapper(html,sidebar)
+  title = file.split("/").last.split(".").first.gsub(/[^0-9A-Za-z]/, ' ').capitalize
+  html = generate_html_wrapper(html,sidebar,title)
   file.gsub!($snippet_directory,$output_directory)
   file.gsub!(extension,".html")
   file = File.new(file,"w")
